@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
 
 function App() {
@@ -11,24 +11,33 @@ function App() {
     location: "",
   });
 
-  const [donations, setDonations] = useState([
-    {
-      id: 1,
-      name: "Cooked Rice & Curry",
-      quantity: "30 packets",
-      expiry: "Today, 8:00 PM",
-      location: "2.1 km away",
-      status: "Available",
-    },
-    {
-      id: 2,
-      name: "Bread & Buns",
-      quantity: "20 packs",
-      expiry: "Today, 10:00 PM",
-      location: "3.4 km away",
-      status: "Available",
-    },
-  ]);
+  const [donations, setDonations] = useState([]);
+
+  // Fetch donations from FastAPI + Supabase
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/donations")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to fetch donations");
+        }
+        return response.json();
+      })
+      .then((result) => {
+        const data = result.data.map((item) => ({
+          id: item.id,
+          name: item.food_name,
+          quantity: item.quantity,
+          expiry: "Available",
+          location: item.location,
+          status: "Available",
+        }));
+
+        setDonations(data);
+      })
+      .catch((error) => {
+        console.error("Error fetching donations:", error);
+      });
+  }, []);
 
   const handleChange = (e) => {
     setFood({
@@ -37,7 +46,7 @@ function App() {
     });
   };
 
-  const addDonation = (e) => {
+  const addDonation = async (e) => {
     e.preventDefault();
 
     if (!food.name || !food.quantity || !food.expiry || !food.location) {
@@ -45,37 +54,100 @@ function App() {
       return;
     }
 
-    setDonations([
-      ...donations,
-      {
-        id: Date.now(),
-        name: food.name,
-        quantity: food.quantity,
-        expiry: food.expiry,
-        location: food.location,
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/donations",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            food_name: food.name,
+            quantity: food.quantity,
+            location: food.location,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to save donation");
+      }
+
+      const result = await response.json();
+
+      alert("Food surplus added successfully!");
+
+      setFood({
+        name: "",
+        quantity: "",
+        expiry: "",
+        location: "",
+      });
+
+      // Refresh donations from database
+      const donationsResponse = await fetch(
+        "http://127.0.0.1:8000/donations"
+      );
+
+      const donationsResult = await donationsResponse.json();
+
+      const data = donationsResult.data.map((item) => ({
+        id: item.id,
+        name: item.food_name,
+        quantity: item.quantity,
+        expiry: "Available",
+        location: item.location,
         status: "Available",
-      },
-    ]);
+      }));
 
-    alert("Food surplus added successfully!");
+      setDonations(data);
 
-    setFood({
-      name: "",
-      quantity: "",
-      expiry: "",
-      location: "",
-    });
+      setPage("food");
 
-    setPage("food");
+      console.log("Backend response:", result);
+    } catch (error) {
+      console.error(error);
+      alert(
+        "Could not connect to backend. Please make sure FastAPI is running."
+      );
+    }
   };
 
-  const acceptDonation = (id) => {
+ const acceptDonation = async (id) => {
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:8000/donations/${id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to accept donation");
+    }
+
+    const result = await response.json();
+
     setDonations(
       donations.map((item) =>
-        item.id === id ? { ...item, status: "Accepted" } : item
+        item.id === id
+          ? { ...item, status: "Accepted" }
+          : item
       )
     );
-  };
+
+    alert("Food donation accepted successfully!");
+
+    console.log("Backend response:", result);
+  } catch (error) {
+    console.error(error);
+    alert("Could not accept donation.");
+  }
+};
 
   return (
     <div className="app">
@@ -83,16 +155,26 @@ function App() {
         <h2>FoodShare</h2>
 
         <nav>
-          <button onClick={() => setPage("home")}>Home</button>
-          <button onClick={() => setPage("donate")}>Donate Food</button>
-          <button onClick={() => setPage("food")}>Find Food</button>
+          <button onClick={() => setPage("home")}>
+            Home
+          </button>
+
+          <button onClick={() => setPage("donate")}>
+            Donate Food
+          </button>
+
+          <button onClick={() => setPage("food")}>
+            Find Food
+          </button>
         </nav>
       </header>
 
       {page === "home" && (
         <main className="hero">
           <div>
-            <p className="tag">REDUCE FOOD WASTE • FEED COMMUNITIES</p>
+            <p className="tag">
+              REDUCE FOOD WASTE • FEED COMMUNITIES
+            </p>
 
             <h1>
               Turn Surplus Food
@@ -101,16 +183,23 @@ function App() {
             </h1>
 
             <p className="description">
-              Connect restaurants and grocery stores with nearby food banks
-              to redistribute edible surplus food before it goes to waste.
+              Connect restaurants and grocery stores with nearby
+              food banks to redistribute edible surplus food before
+              it goes to waste.
             </p>
 
             <div className="actions">
-              <button className="primary" onClick={() => setPage("donate")}>
+              <button
+                className="primary"
+                onClick={() => setPage("donate")}
+              >
                 Donate Food
               </button>
 
-              <button className="secondary" onClick={() => setPage("food")}>
+              <button
+                className="secondary"
+                onClick={() => setPage("food")}
+              >
                 Find Food
               </button>
             </div>
@@ -118,7 +207,9 @@ function App() {
 
           <div className="hero-card">
             <div className="food-icon">🍱</div>
+
             <h3>Every Meal Matters</h3>
+
             <p>
               Your surplus can become someone's next meal.
             </p>
@@ -129,12 +220,17 @@ function App() {
       {page === "donate" && (
         <main className="page">
           <h1>Donate Surplus Food</h1>
+
           <p className="subtitle">
             Share your edible surplus with a nearby food bank.
           </p>
 
-          <form onSubmit={addDonation} className="form-card">
+          <form
+            onSubmit={addDonation}
+            className="form-card"
+          >
             <label>Food Name</label>
+
             <input
               name="name"
               value={food.name}
@@ -143,6 +239,7 @@ function App() {
             />
 
             <label>Quantity</label>
+
             <input
               name="quantity"
               value={food.quantity}
@@ -151,6 +248,7 @@ function App() {
             />
 
             <label>Expiry Time</label>
+
             <input
               name="expiry"
               value={food.expiry}
@@ -159,6 +257,7 @@ function App() {
             />
 
             <label>Location</label>
+
             <input
               name="location"
               value={food.location}
@@ -166,7 +265,10 @@ function App() {
               placeholder="Example: Sivaganga"
             />
 
-            <button className="primary submit" type="submit">
+            <button
+              className="primary submit"
+              type="submit"
+            >
               Add Food Donation
             </button>
           </form>
@@ -176,27 +278,44 @@ function App() {
       {page === "food" && (
         <main className="page">
           <h1>Available Food</h1>
+
           <p className="subtitle">
             Surplus food available for nearby food banks.
           </p>
 
           <div className="food-list">
             {donations.map((item) => (
-              <div className="food-card" key={item.id}>
+              <div
+                className="food-card"
+                key={item.id}
+              >
                 <div>
                   <h3>{item.name}</h3>
-                  <p>Quantity: {item.quantity}</p>
-                  <p>Expiry: {item.expiry}</p>
-                  <p>Location: {item.location}</p>
+
+                  <p>
+                    Quantity: {item.quantity}
+                  </p>
+
+                  <p>
+                    Expiry: {item.expiry}
+                  </p>
+
+                  <p>
+                    Location: {item.location}
+                  </p>
                 </div>
 
                 <div>
-                  <span className="status">{item.status}</span>
+                  <span className="status">
+                    {item.status}
+                  </span>
 
                   {item.status === "Available" && (
                     <button
                       className="accept"
-                      onClick={() => acceptDonation(item.id)}
+                      onClick={() =>
+                        acceptDonation(item.id)
+                      }
                     >
                       Accept
                     </button>
