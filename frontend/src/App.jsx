@@ -13,9 +13,9 @@ function App() {
 
   const [donations, setDonations] = useState([]);
 
-  // Fetch donations from FastAPI + Supabase
+  // Fetch donations from live FastAPI + Supabase
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/donations")
+    fetch("https://food-surplus-locator.onrender.com/donations")
       .then((response) => {
         if (!response.ok) {
           throw new Error("Failed to fetch donations");
@@ -56,7 +56,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/donations",
+        "https://food-surplus-locator.onrender.com/donations",
         {
           method: "POST",
           headers: {
@@ -87,8 +87,12 @@ function App() {
 
       // Refresh donations from database
       const donationsResponse = await fetch(
-        "http://127.0.0.1:8000/donations"
+        "https://food-surplus-locator.onrender.com/donations"
       );
+
+      if (!donationsResponse.ok) {
+        throw new Error("Failed to fetch updated donations");
+      }
 
       const donationsResult = await donationsResponse.json();
 
@@ -102,52 +106,49 @@ function App() {
       }));
 
       setDonations(data);
-
       setPage("food");
 
       console.log("Backend response:", result);
     } catch (error) {
       console.error(error);
-      alert(
-        "Could not connect to backend. Please make sure FastAPI is running."
-      );
+      alert("Could not connect to backend.");
     }
   };
 
- const acceptDonation = async (id) => {
-  try {
-    const response = await fetch(
-      `http://127.0.0.1:8000/donations/${id}`,
-      {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+  const acceptDonation = async (id) => {
+    try {
+      const response = await fetch(
+        `https://food-surplus-locator.onrender.com/donations/${id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to accept donation");
       }
-    );
 
-    if (!response.ok) {
-      throw new Error("Failed to accept donation");
+      const result = await response.json();
+
+      setDonations(
+        donations.map((item) =>
+          item.id === id
+            ? { ...item, status: "Accepted" }
+            : item
+        )
+      );
+
+      alert("Food donation accepted successfully!");
+
+      console.log("Backend response:", result);
+    } catch (error) {
+      console.error(error);
+      alert("Could not accept donation.");
     }
-
-    const result = await response.json();
-
-    setDonations(
-      donations.map((item) =>
-        item.id === id
-          ? { ...item, status: "Accepted" }
-          : item
-      )
-    );
-
-    alert("Food donation accepted successfully!");
-
-    console.log("Backend response:", result);
-  } catch (error) {
-    console.error(error);
-    alert("Could not accept donation.");
-  }
-};
+  };
 
   return (
     <div className="app">
